@@ -252,11 +252,8 @@ export interface ProfileMenuItemType {
 
 | No | Nama Anggota | NIM | Peran |
 | :---: | :--- | :---: | :--- |
-| 1 | **[Nama Mahasiswa 1]** | [NIM-001] | Lead Mobile Developer & UI/UX |
-| 2 | **[Nama Mahasiswa 2]** | [NIM-002] | Frontend Component & TypeScript |
-| 3 | **[Nama Mahasiswa 3]** | [NIM-003] | Quality Assurance & Documentation |
-
-*(Catatan: Silakan ganti placeholder nama dan NIM di atas sesuai anggota kelompok Anda).*
+| 1 | **Rhiwugha Dwi. S** | [202410370110161] |
+| 2 | **Nawa Istiqomah** | [202410370110372] |
 
 ---
 
