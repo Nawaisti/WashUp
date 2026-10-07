@@ -250,8 +250,8 @@ export interface ProfileMenuItemType {
 
 *Praktikum Pemrograman Mobile — Modul 1 (Sintaks & UI Dasar)*
 
-| No | Nama Anggota | NIM | Peran |
-| :---: | :--- | :---: | :--- |
+| No | Nama Anggota | NIM |
+| :---: | :--- | :---: |
 | 1 | **Rhiwugha Dwi. S** | [202410370110161] |
 | 2 | **Nawa Istiqomah** | [202410370110372] |
 
