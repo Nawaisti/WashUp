@@ -37,7 +37,7 @@ export default function StatusScreen() {
   const [selectedOrder, setSelectedOrder] = useState<Order>(ORDERS_DATA[0]);
 
   // Current progress step dari pesanan (1 s/d 4)
-  const currentStep = selectedOrder.progressStep || 2;
+  const currentStep = selectedOrder.progressStep ?? 2;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
