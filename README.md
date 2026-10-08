@@ -119,7 +119,7 @@ Semua konsep wajib materi **Modul 1: Sintaks & UI Dasar** telah diimplementasika
 
 - **Framework**: [React Native](https://reactnative.dev/) (v0.74.5)
 - **Tooling & Platform**: [Expo SDK 51](https://expo.dev/)
-- **Routing & Navigasi**: [Expo Router v3](https://docs.expo.dev/router/introduction/) & Fallback Root Tabs
+- **Routing & Navigasi**: [Expo Router](https://docs.expo.dev/router/introduction/)
 - **Bahasa Pemrograman**: [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
 - **Ikon**: `@expo/vector-icons` (Ionicons)
 - **Komponen Safe Area**: `react-native-safe-area-context`
@@ -156,7 +156,6 @@ WashUp/
 │   │   └── laundry.ts             # TypeScript Interfaces & Types
 │   └── utils/
 │       └── helpers.ts             # Helper Functions: formatRupiah, getStatusStyle, filter
-├── App.tsx                        # Root App Component (Standalone Tab Runner)
 ├── app.json                       # Konfigurasi Expo & Branding WashUp
 ├── package.json                   # Dependencies & Scripts
 ├── tsconfig.json                  # Konfigurasi TypeScript & Path Alias (@/*)
