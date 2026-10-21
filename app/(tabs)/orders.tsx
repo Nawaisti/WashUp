@@ -18,8 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { COLORS, SHADOWS, RADIUS } from '../../src/constants/theme';
-import { SERVICES_DATA } from '../../src/constants/dummyData';
-import { Service } from '../../src/types/laundry';
+import { SERVICES_DATA, ORDERS_DATA } from '../../src/constants/dummyData';
+import { Service, Order } from '../../src/types/laundry';
 import { formatRupiah, calculateEstimatedPrice } from '../../src/utils/helpers';
 import { IconSymbol } from '../../src/components/IconSymbol';
 import { CustomButton } from '../../src/components/CustomButton';
@@ -52,8 +52,36 @@ export default function CreateOrderScreen() {
       return;
     }
 
-    // Generate Order ID baru
-    const newOrderId = `#WU00${Math.floor(100 + Math.random() * 900)}`;
+    // Generate Order ID baru yang unik
+    let newOrderId = '';
+    do {
+      newOrderId = `#WU00${Math.floor(100 + Math.random() * 900)}`;
+    } while (ORDERS_DATA.some((o) => o.id === newOrderId));
+
+    // Format tanggal hari ini
+    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const now = new Date();
+    const formattedDate = `${now.getDate()} ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+
+    // Buat objek pesanan baru dari data form aktual pengguna
+    const newOrder: Order = {
+      id: newOrderId,
+      customerName: customerName.trim(),
+      service: selectedService.name,
+      date: formattedDate,
+      amount: numericWeight,
+      unit: selectedService.unit,
+      price: estimatedPrice,
+      status: 'Diproses',
+      notes: notes.trim() || undefined,
+      progressStep: 1, // Tahap 1: Pesanan Diterima
+      address: pickupOption === 'jemput' ? 'Layanan Jemput ke Alamat Pelanggan' : 'Antar Sendiri ke Outlet WashUp',
+      paymentMethod: 'WashPay',
+    };
+
+    // Tambahkan pesanan baru ke array utama ORDERS_DATA
+    ORDERS_DATA.unshift(newOrder);
+
     setSubmittedOrderId(newOrderId);
     setIsSuccessModalVisible(true);
   };
@@ -62,6 +90,15 @@ export default function CreateOrderScreen() {
     setIsSuccessModalVisible(false);
     setWeight('3');
     setNotes('');
+  };
+
+  // Navigasi kembali dengan pemeriksaan riwayat (Modul 2: router.canGoBack, router.back, router.replace)
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   return (
@@ -75,8 +112,33 @@ export default function CreateOrderScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Halaman */}
+          {/* Header Halaman dengan Navigasi Kembali & Pintasan Status */}
           <View style={styles.screenHeader}>
+            <View style={styles.headerTopRow}>
+              <Pressable
+                onPress={handleGoBack}
+                style={({ pressed }) => [
+                  styles.headerNavBtn,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+                accessibilityLabel="Kembali ke halaman sebelumnya"
+              >
+                <IconSymbol name="chevron-back" size={18} color={COLORS.primaryDark} />
+                <Text style={styles.headerNavBtnText}>Kembali</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/(tabs)/status')}
+                style={({ pressed }) => [
+                  styles.headerQuickLink,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <IconSymbol name="sync-circle-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.headerQuickLinkText}>Lacak Status</Text>
+              </Pressable>
+            </View>
+
             <Text style={styles.headerTitle}>Buat Pesanan</Text>
             <Text style={styles.headerSubtitle}>
               Isi formulir untuk memesan layanan laundry WashUp
@@ -103,7 +165,11 @@ export default function CreateOrderScreen() {
                 <Pressable
                   onPress={() => {
                     setIsSuccessModalVisible(false);
-                    router.push('/(tabs)/status' as any);
+                    // Modul 2: router.replace dengan parameter orderId menuju status
+                    router.replace({
+                      pathname: '/(tabs)/status',
+                      params: { orderId: submittedOrderId },
+                    });
                   }}
                   style={[styles.successActionBtn, { backgroundColor: COLORS.primary }]}
                 >
@@ -385,6 +451,43 @@ const styles = StyleSheet.create({
   screenHeader: {
     marginTop: 10,
     marginBottom: 20,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headerNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  headerNavBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  headerQuickLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryLight,
+    gap: 4,
+  },
+  headerQuickLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
   },
   headerTitle: {
     fontSize: 24,

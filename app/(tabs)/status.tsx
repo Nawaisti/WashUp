@@ -4,7 +4,7 @@
 // Progress Pelacakan: Pesanan → Dicuci → Disetrika → Selesai
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, SHADOWS, RADIUS } from '../../src/constants/theme';
 import { ORDERS_DATA } from '../../src/constants/dummyData';
 import { StatusBadge } from '../../src/components/StatusBadge';
@@ -32,9 +32,54 @@ const TRACKING_STEPS = [
 
 export default function StatusScreen() {
   const router = useRouter();
+  const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+
+  // State daftar pesanan reaktif (Modul 1: State Array of Objects)
+  const [ordersList, setOrdersList] = useState<Order[]>(ORDERS_DATA);
 
   // State pesanan aktif yang sedang dipantau (default: #WU0067)
   const [selectedOrder, setSelectedOrder] = useState<Order>(ORDERS_DATA[0]);
+
+  // Sinkronisasi pesanan dari parameter navigasi router (Modul 2: useLocalSearchParams & useEffect)
+  useEffect(() => {
+    setOrdersList([...ORDERS_DATA]);
+
+    if (orderId) {
+      const targetOrder = ORDERS_DATA.find((o) => o.id === orderId);
+      if (targetOrder) {
+        setSelectedOrder(targetOrder);
+      }
+    }
+  }, [orderId]);
+
+  // Modul 2 (10%): State feedback notifikasi status saat pesanan berganti
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
+
+  // Modul 2 (10%): useEffect untuk menangani side-effect perubahan pesanan & timer auto-dismiss dengan cleanup
+  useEffect(() => {
+    let message = `Memantau pesanan ${selectedOrder.id}: status ${selectedOrder.status}.`;
+    if (selectedOrder.status === 'Selesai') {
+      message = `Pesanan ${selectedOrder.id} telah selesai dan siap diambil di outlet!`;
+    } else if (selectedOrder.status === 'Dibatalkan') {
+      message = `Pesanan ${selectedOrder.id} telah dibatalkan.`;
+    } else if (selectedOrder.status === 'Sedang Dicuci') {
+      message = `Pesanan ${selectedOrder.id} sedang dalam proses pencucian mesin.`;
+    } else if (selectedOrder.status === 'Diproses') {
+      message = `Pesanan ${selectedOrder.id} telah diterima dan sedang diproses.`;
+    }
+
+    setStatusNotice(message);
+
+    // Timer auto-dismiss notice setelah 3.5 detik (Modul 2: side effect timer)
+    const timer = setTimeout(() => {
+      setStatusNotice(null);
+    }, 3500);
+
+    // Cleanup: bersihkan timeout jika pesanan berganti sebelum timer selesai atau saat unmount
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [selectedOrder.id, selectedOrder.status]);
 
   // Current progress step dari pesanan (1 s/d 4)
   const currentStep = selectedOrder.progressStep ?? 2;
@@ -60,7 +105,7 @@ export default function StatusScreen() {
         <View style={styles.selectorSection}>
           <Text style={styles.selectorLabel}>Pilih Pesanan untuk Dipantau:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalOrderList}>
-            {ORDERS_DATA.map((order) => {
+            {ordersList.map((order) => {
               const isSelected = order.id === selectedOrder.id;
               return (
                 <Pressable
@@ -88,6 +133,33 @@ export default function StatusScreen() {
             })}
           </ScrollView>
         </View>
+
+        {/* Modul 2 (10%): Notifikasi Perubahan Status Pesanan via useEffect */}
+        {statusNotice && (
+          <View style={styles.noticeBanner}>
+            <IconSymbol
+              name={
+                selectedOrder.status === 'Selesai'
+                  ? 'checkmark-circle'
+                  : selectedOrder.status === 'Dibatalkan'
+                  ? 'alert-circle'
+                  : 'information-circle'
+              }
+              size={18}
+              color={
+                selectedOrder.status === 'Selesai'
+                  ? COLORS.statusSuccess
+                  : selectedOrder.status === 'Dibatalkan'
+                  ? COLORS.statusDanger
+                  : COLORS.primary
+              }
+            />
+            <Text style={styles.noticeBannerText}>{statusNotice}</Text>
+            <Pressable onPress={() => setStatusNotice(null)} hitSlop={8}>
+              <IconSymbol name="close" size={16} color={COLORS.textMuted} />
+            </Pressable>
+          </View>
+        )}
 
         {/* ================================================================ */}
         {/* KARTU RINGKASAN PESANAN (#WU0067)                                */}
@@ -316,6 +388,24 @@ const styles = StyleSheet.create({
   orderChipText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  noticeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    lineHeight: 16,
   },
   mainCard: {
     backgroundColor: COLORS.surface,
