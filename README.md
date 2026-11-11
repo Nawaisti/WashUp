@@ -117,9 +117,9 @@ Semua konsep wajib materi **Modul 1: Sintaks & UI Dasar** telah diimplementasika
 
 ## 🛠️ Teknologi (Technologies)
 
-- **Framework**: [React Native](https://reactnative.dev/) (v0.86.3) & [React](https://react.dev/) (v19.2.3)
-- **Tooling & Platform**: [Expo SDK 57](https://expo.dev/)
-- **Routing & Navigasi**: [Expo Router](https://docs.expo.dev/router/introduction/) (~57.0.25)
+- **Framework**: [React Native](https://reactnative.dev/) (v0.88.1) & [React](https://react.dev/) (v19.3.0)
+- **Tooling & Platform**: [Expo SDK 58](https://expo.dev/)
+- **Routing & Navigasi**: [Expo Router](https://docs.expo.dev/router/introduction/) (~58.0.30)
 - **Bahasa Pemrograman**: [TypeScript](https://www.typescriptlang.org/) (~6.0.3, Strict Mode)
 - **Ikon**: `@expo/vector-icons` (Ionicons)
 - **Komponen Safe Area**: `react-native-safe-area-context`

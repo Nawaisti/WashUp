@@ -3,7 +3,7 @@
 // (Modul 1: JSX, View, Text, Image/Icon, Pressable, ScrollView, .map(), Component)
 // ============================================================================
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,44 @@ import { ServiceCard } from '../../src/components/ServiceCard';
 import { StatusBadge } from '../../src/components/StatusBadge';
 import { IconSymbol } from '../../src/components/IconSymbol';
 import { Service } from '../../src/types/laundry';
+import { WeatherCard } from '../../src/components/WeatherCard';
+import { fetchWeather } from '../../src/services/weatherService';
+import { WeatherData, WeatherStatus } from '../../src/types/weather';
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  // Modul 3: state permintaan API cuaca (loading -> success / error)
+  const [weatherStatus, setWeatherStatus] = useState<WeatherStatus>('loading');
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+
+  // Modul 3: memanggil fungsi async dan menangani Promise dengan .then() / .catch()
+  const loadWeather = useCallback((isActive: () => boolean = () => true) => {
+    setWeatherStatus('loading');
+    setWeatherError(null);
+
+    fetchWeather()
+      .then((data) => {
+        if (!isActive()) return;
+        setWeatherData(data);
+        setWeatherStatus('success');
+      })
+      .catch((error: Error) => {
+        if (!isActive()) return;
+        setWeatherError(error.message);
+        setWeatherStatus('error');
+      });
+  }, []);
+
+  // Ambil data cuaca sekali saat layar Home dimuat (abaikan hasil jika layar sudah unmount)
+  useEffect(() => {
+    let mounted = true;
+    loadWeather(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, [loadWeather]);
 
   // Pesanan aktif yang sedang berlangsung (#WU0067)
   const activeOrder = ORDERS_DATA.find((o) => o.status === 'Sedang Dicuci') || ORDERS_DATA[0];
@@ -118,6 +153,16 @@ export default function HomeScreen() {
             <IconSymbol name="arrow-forward" size={16} color={COLORS.primaryDark} />
           </Pressable>
         </View>
+
+        {/* ================================================================== */}
+        {/* CUACA (Modul 3: data dari Open-Meteo API, informasi pendukung)    */}
+        {/* ================================================================== */}
+        <WeatherCard
+          status={weatherStatus}
+          data={weatherData}
+          errorMessage={weatherError}
+          onRetry={() => loadWeather()}
+        />
 
         {/* ================================================================== */}
         {/* PESANAN AKTIF SECTION: Menampilkan pesanan yang sedang berjalan */}
