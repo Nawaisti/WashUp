@@ -1,9 +1,11 @@
 // ============================================================================
 // WashUp - Halaman Buat Pesanan / Layanan (Screen 2)
 // (Modul 1: TextInput, Pressable, useState, Function Estimasi, Condition, Inline Styling)
+// (Modul 2: router.canGoBack, router.back, router.replace dengan params orderId)
+// (Modul 4: Supabase PostgreSQL INSERT ke tabel laundry_orders dengan user_id RLS)
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,32 +20,47 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { COLORS, SHADOWS, RADIUS } from '../../src/constants/theme';
-import { SERVICES_DATA, ORDERS_DATA } from '../../src/constants/dummyData';
-import { Service, Order } from '../../src/types/laundry';
+import { SERVICES_DATA } from '../../src/constants/dummyData';
+import { Service } from '../../src/types/laundry';
 import { formatRupiah, calculateEstimatedPrice } from '../../src/utils/helpers';
 import { IconSymbol } from '../../src/components/IconSymbol';
 import { CustomButton } from '../../src/components/CustomButton';
+import { useAuth } from '../../src/context/AuthContext';
+import { useOrders } from '../../src/context/OrdersContext';
 
 export default function CreateOrderScreen() {
   const router = useRouter();
+  const { userDisplayName } = useAuth();
+  const { createOrder, isMutating } = useOrders();
 
   // State Form Input (Modul 1: Variables & Local State)
-  const [customerName, setCustomerName] = useState<string>('Andi Pratama');
+  const [customerName, setCustomerName] = useState<string>(userDisplayName || 'Andi Pratama');
   const [selectedService, setSelectedService] = useState<Service>(SERVICES_DATA[1]); // Default: Cuci + Setrika
   const [weight, setWeight] = useState<string>('3');
   const [notes, setNotes] = useState<string>('');
   const [pickupOption, setPickupOption] = useState<'antar' | 'jemput'>('antar');
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState<boolean>(false);
   const [submittedOrderId, setSubmittedOrderId] = useState<string>('');
+  const [syncedToCloud, setSyncedToCloud] = useState<boolean>(false);
+  const [cloudNoticeError, setCloudNoticeError] = useState<string | null>(null);
+
+  // Sinkronkan nama pelanggan default dengan user yang sedang login (Modul 4)
+  useEffect(() => {
+    if (userDisplayName) {
+      setCustomerName(userDisplayName);
+    }
+  }, [userDisplayName]);
 
   // Perhitungan Estimasi Harga secara Dinamis (Modul 1: Custom Function)
   const numericWeight = parseFloat(weight.replace(',', '.')) || 0;
   const estimatedPrice = calculateEstimatedPrice(selectedService.price, numericWeight);
 
-  // Handler saat form disubmit (Modul 1: Function + Condition)
-  const handleSubmitOrder = () => {
-    // Validasi form
-    if (!customerName.trim()) {
+  // Handler saat form disubmit (Modul 1 & Modul 4: Supabase INSERT)
+  const handleSubmitOrder = async () => {
+    if (isMutating) return;
+
+    const cleanCustomerName = customerName.trim();
+    if (!cleanCustomerName) {
       Alert.alert('Perhatian', 'Silakan masukkan nama pelanggan.');
       return;
     }
@@ -52,37 +69,25 @@ export default function CreateOrderScreen() {
       return;
     }
 
-    // Generate Order ID baru yang unik
-    let newOrderId = '';
-    do {
-      newOrderId = `#WU00${Math.floor(100 + Math.random() * 900)}`;
-    } while (ORDERS_DATA.some((o) => o.id === newOrderId));
+    const addressText =
+      pickupOption === 'antar'
+        ? 'Layanan Kurir Antar-Jemput ke Alamat Pelanggan'
+        : 'Antar Mandiri ke Outlet WashUp';
 
-    // Format tanggal hari ini
-    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    const now = new Date();
-    const formattedDate = `${now.getDate()} ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
-
-    // Buat objek pesanan baru dari data form aktual pengguna
-    const newOrder: Order = {
-      id: newOrderId,
-      customerName: customerName.trim(),
+    const result = await createOrder({
+      customerName: cleanCustomerName,
       service: selectedService.name,
-      date: formattedDate,
       amount: numericWeight,
       unit: selectedService.unit,
       price: estimatedPrice,
-      status: 'Diproses',
       notes: notes.trim() || undefined,
-      progressStep: 1, // Tahap 1: Pesanan Diterima
-      address: pickupOption === 'jemput' ? 'Layanan Jemput ke Alamat Pelanggan' : 'Antar Sendiri ke Outlet WashUp',
+      address: addressText,
       paymentMethod: 'WashPay',
-    };
+    });
 
-    // Tambahkan pesanan baru ke array utama ORDERS_DATA
-    ORDERS_DATA.unshift(newOrder);
-
-    setSubmittedOrderId(newOrderId);
+    setSubmittedOrderId(result.order.id);
+    setSyncedToCloud(result.syncedToCloud);
+    setCloudNoticeError(result.error ?? null);
     setIsSuccessModalVisible(true);
   };
 
@@ -90,6 +95,7 @@ export default function CreateOrderScreen() {
     setIsSuccessModalVisible(false);
     setWeight('3');
     setNotes('');
+    setCloudNoticeError(null);
   };
 
   // Navigasi kembali dengan pemeriksaan riwayat (Modul 2: router.canGoBack, router.back, router.replace)
@@ -141,7 +147,7 @@ export default function CreateOrderScreen() {
 
             <Text style={styles.headerTitle}>Buat Pesanan</Text>
             <Text style={styles.headerSubtitle}>
-              Isi formulir untuk memesan layanan laundry WashUp
+              Isi formulir untuk memesan layanan laundry WashUp (Tersinkronisasi ke Cloud)
             </Text>
           </View>
 
@@ -157,7 +163,15 @@ export default function CreateOrderScreen() {
                   ID Pesanan: <Text style={styles.boldOrderId}>{submittedOrderId}</Text>
                 </Text>
                 <Text style={styles.successDetailText}>
-                  Layanan {selectedService.name} ({numericWeight} {selectedService.unit}) • {formatRupiah(estimatedPrice)}
+                  Layanan {selectedService.name} ({numericWeight} {selectedService.unit}) •{' '}
+                  {formatRupiah(estimatedPrice)}
+                </Text>
+                <Text style={styles.cloudSyncBadgeText}>
+                  {syncedToCloud
+                    ? 'Tersimpan di Supabase PostgreSQL Cloud (Dilindungi RLS)'
+                    : cloudNoticeError
+                    ? `Disimpan secara lokal (Catatan Cloud: ${cloudNoticeError})`
+                    : 'Disimpan secara lokal di perangkat'}
                 </Text>
               </View>
 
@@ -388,10 +402,10 @@ export default function CreateOrderScreen() {
             </View>
 
             <View style={styles.estimateDetailRow}>
-              <Text style={styles.estimateDetailLabel}>
+              <Text style={styles.estimateDetailLabel} numberOfLines={1}>
                 {selectedService.name} ({numericWeight} {selectedService.unit})
               </Text>
-              <Text style={styles.estimateDetailValue}>
+              <Text style={styles.estimateDetailValue} numberOfLines={1}>
                 {formatRupiah(estimatedPrice)}
               </Text>
             </View>
@@ -420,11 +434,12 @@ export default function CreateOrderScreen() {
           {/* ============================================================== */}
           <View style={styles.submitSection}>
             <CustomButton
-              title="Pesan Sekarang"
+              title={isMutating ? 'Menyimpan ke Cloud...' : 'Pesan Sekarang'}
               onPress={handleSubmitOrder}
               variant="primary"
               size="large"
               icon="send"
+              disabled={isMutating}
             />
           </View>
         </ScrollView>
@@ -534,6 +549,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  cloudSyncBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+    marginTop: 6,
   },
   successActionRow: {
     flexDirection: 'row',
@@ -709,15 +730,18 @@ const styles = StyleSheet.create({
   estimateDetailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 8,
   },
   estimateDetailLabel: {
+    flex: 1,
     fontSize: 13,
     color: COLORS.textSecondary,
   },
   estimateDetailValue: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.textPrimary,
   },
   estimateDivider: {

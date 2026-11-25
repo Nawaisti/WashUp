@@ -2,6 +2,7 @@
 // WashUp - Halaman Riwayat Pesanan (Screen 4 - Focus Detail Tinggi)
 // (Modul 1: Array of Objects, TypeScript Interface Order, .map(), Reusable OrderCard,
 //  Filter Tabs, Function, Condition, Inline Styling, Modal Detail, Pressable, ScrollView)
+// (Modul 4: Sinkronisasi Cloud PostgreSQL SELECT, Pull-to-Refresh, & Mode RLS)
 // ============================================================================
 
 import React, { useState } from 'react';
@@ -13,21 +14,31 @@ import {
   Pressable,
   TextInput,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, RADIUS } from '../../src/constants/theme';
-import { ORDERS_DATA } from '../../src/constants/dummyData';
 import { OrderCard } from '../../src/components/OrderCard';
 import { StatusBadge } from '../../src/components/StatusBadge';
 import { IconSymbol } from '../../src/components/IconSymbol';
 import { CustomButton } from '../../src/components/CustomButton';
 import { formatRupiah, filterOrdersByTab } from '../../src/utils/helpers';
 import { Order, HistoryTabFilter } from '../../src/types/laundry';
+import { useOrders } from '../../src/context/OrdersContext';
 
 // Daftar opsi tab filter (Modul 1: Array of Strings)
 const FILTER_TABS: HistoryTabFilter[] = ['Semua', 'Diproses', 'Selesai', 'Dibatalkan'];
 
 export default function HistoryScreen() {
+  const {
+    orders,
+    cloudOrders,
+    dataSourceMode,
+    setDataSourceMode,
+    isLoadingCloud,
+    refreshOrders,
+  } = useOrders();
+
   // State Tab Filter Aktif (Modul 1: State & TypeScript Type)
   const [activeTab, setActiveTab] = useState<HistoryTabFilter>('Semua');
 
@@ -39,7 +50,7 @@ export default function HistoryScreen() {
   const [isDetailModalVisible, setIsDetailModalVisible] = useState<boolean>(false);
 
   // 1. Eksekusi filter berdasarkan tab aktif (Modul 1: Custom Function + Condition)
-  const tabFilteredOrders = filterOrdersByTab(ORDERS_DATA, activeTab);
+  const tabFilteredOrders = filterOrdersByTab(orders, activeTab);
 
   // 2. Eksekusi pencarian teks (ID atau Layanan)
   const finalFilteredOrders = tabFilteredOrders.filter((order) => {
@@ -53,10 +64,12 @@ export default function HistoryScreen() {
   });
 
   // Statistik Ringkasan Pesanan (Modul 1: Function / Array Methods)
-  const totalCount = ORDERS_DATA.length;
-  const completedCount = ORDERS_DATA.filter((o) => o.status === 'Selesai').length;
-  const inProcessCount = ORDERS_DATA.filter((o) => o.status === 'Sedang Dicuci' || o.status === 'Diproses').length;
-  const cancelledCount = ORDERS_DATA.filter((o) => o.status === 'Dibatalkan').length;
+  const totalCount = orders.length;
+  const completedCount = orders.filter((o) => o.status === 'Selesai').length;
+  const inProcessCount = orders.filter(
+    (o) => o.status === 'Sedang Dicuci' || o.status === 'Diproses' || o.status === 'Disetrika'
+  ).length;
+  const cancelledCount = orders.filter((o) => o.status === 'Dibatalkan').length;
 
   // Handler saat kartu pesanan diklik
   const handleOrderPress = (order: Order) => {
@@ -70,6 +83,14 @@ export default function HistoryScreen() {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoadingCloud}
+            onRefresh={refreshOrders}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
       >
         {/* ================================================================ */}
         {/* HEADER SECTION: Judul & Subtitle                                 */}
@@ -79,6 +100,49 @@ export default function HistoryScreen() {
           <Text style={styles.headerSubtitle}>
             Daftar lengkap seluruh transaksi dan pesanan cucian Anda
           </Text>
+        </View>
+
+        {/* Pilihan Mode Data: Semua (+Dummy Modul 1) vs Cloud Saya (RLS Modul 4) */}
+        <View style={styles.sourceSwitchRow}>
+          <Pressable
+            onPress={() => setDataSourceMode('all')}
+            style={[
+              styles.sourceChip,
+              {
+                backgroundColor: dataSourceMode === 'all' ? COLORS.primary : COLORS.surface,
+                borderColor: dataSourceMode === 'all' ? COLORS.primaryDark : COLORS.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.sourceChipText,
+                { color: dataSourceMode === 'all' ? '#FFFFFF' : COLORS.textSecondary },
+              ]}
+            >
+              Semua (+5 Dummy)
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setDataSourceMode('cloud')}
+            style={[
+              styles.sourceChip,
+              {
+                backgroundColor: dataSourceMode === 'cloud' ? COLORS.primary : COLORS.surface,
+                borderColor: dataSourceMode === 'cloud' ? COLORS.primaryDark : COLORS.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.sourceChipText,
+                { color: dataSourceMode === 'cloud' ? '#FFFFFF' : COLORS.textSecondary },
+              ]}
+            >
+              Cloud Saya (RLS: {cloudOrders.length})
+            </Text>
+          </Pressable>
         </View>
 
         {/* ================================================================ */}
@@ -188,7 +252,7 @@ export default function HistoryScreen() {
           {finalFilteredOrders.length > 0 ? (
             finalFilteredOrders.map((order) => (
               <OrderCard
-                key={order.id}
+                key={`${order.isCloud ? 'cloud' : 'local'}-${order.id}`}
                 order={order}
                 onPress={handleOrderPress}
               />
@@ -201,12 +265,15 @@ export default function HistoryScreen() {
               </View>
               <Text style={styles.emptyTitle}>Tidak Ada Pesanan</Text>
               <Text style={styles.emptyDesc}>
-                Tidak ada pesanan laundry dengan status "{activeTab}".
+                {dataSourceMode === 'cloud'
+                  ? 'Belum ada pesanan cloud milik akun ini (Terisolasi oleh RLS).'
+                  : `Tidak ada pesanan laundry dengan status "${activeTab}".`}
               </Text>
               <Pressable
                 onPress={() => {
                   setActiveTab('Semua');
                   setSearchQuery('');
+                  setDataSourceMode('all');
                 }}
                 style={styles.resetFilterBtn}
               >
@@ -255,7 +322,9 @@ export default function HistoryScreen() {
               <View style={styles.receiptBox}>
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Pelanggan</Text>
-                  <Text style={styles.receiptValue}>{selectedOrder.customerName || 'Andi Pratama'}</Text>
+                  <Text style={styles.receiptValue}>
+                    {selectedOrder.customerName || 'Andi Pratama'}
+                  </Text>
                 </View>
 
                 <View style={styles.receiptRow}>
@@ -265,12 +334,23 @@ export default function HistoryScreen() {
 
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Kuantitas</Text>
-                  <Text style={styles.receiptValue}>{selectedOrder.amount} {selectedOrder.unit}</Text>
+                  <Text style={styles.receiptValue}>
+                    {selectedOrder.amount} {selectedOrder.unit}
+                  </Text>
                 </View>
 
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Metode Bayar</Text>
-                  <Text style={styles.receiptValue}>{selectedOrder.paymentMethod || 'WashPay'}</Text>
+                  <Text style={styles.receiptValue}>
+                    {selectedOrder.paymentMethod || 'WashPay'}
+                  </Text>
+                </View>
+
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Penyimpanan</Text>
+                  <Text style={styles.receiptValue}>
+                    {selectedOrder.isCloud ? 'Supabase PostgreSQL (RLS)' : 'Data Lokal Perangkat'}
+                  </Text>
                 </View>
 
                 {selectedOrder.notes && (
@@ -321,7 +401,7 @@ const styles = StyleSheet.create({
   },
   screenHeader: {
     marginTop: 10,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerTitle: {
     fontSize: 24,
@@ -333,6 +413,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  sourceSwitchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sourceChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  sourceChipText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   statsCard: {
     backgroundColor: COLORS.surface,
@@ -527,6 +625,8 @@ const styles = StyleSheet.create({
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
     marginBottom: 8,
   },
   receiptLabel: {
@@ -534,6 +634,8 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   receiptValue: {
+    flex: 1,
+    textAlign: 'right',
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.textPrimary,

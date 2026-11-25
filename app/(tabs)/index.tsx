@@ -1,6 +1,8 @@
 // ============================================================================
 // WashUp - Halaman Home / Beranda (Screen 1)
 // (Modul 1: JSX, View, Text, Image/Icon, Pressable, ScrollView, .map(), Component)
+// (Modul 3: External API Open-Meteo, TypeScript Interface, Custom Async & Promise)
+// (Modul 4: Global AuthContext Greeting & Cloud Orders Pull-to-Refresh)
 // ============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -11,11 +13,12 @@ import {
   ScrollView,
   Pressable,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, RADIUS } from '../../src/constants/theme';
-import { SERVICES_DATA, ORDERS_DATA, PROMO_BANNER, CURRENT_USER } from '../../src/constants/dummyData';
+import { SERVICES_DATA, ORDERS_DATA, PROMO_BANNER } from '../../src/constants/dummyData';
 import { WashUpLogo } from '../../src/components/WashUpLogo';
 import { ServiceCard } from '../../src/components/ServiceCard';
 import { StatusBadge } from '../../src/components/StatusBadge';
@@ -24,9 +27,13 @@ import { Service } from '../../src/types/laundry';
 import { WeatherCard } from '../../src/components/WeatherCard';
 import { fetchWeather } from '../../src/services/weatherService';
 import { WeatherData, WeatherStatus } from '../../src/types/weather';
+import { useAuth } from '../../src/context/AuthContext';
+import { useOrders } from '../../src/context/OrdersContext';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { userDisplayName, userEmail } = useAuth();
+  const { orders, cloudOrders, refreshOrders, isLoadingCloud } = useOrders();
 
   // Modul 3: state permintaan API cuaca (loading -> success / error)
   const [weatherStatus, setWeatherStatus] = useState<WeatherStatus>('loading');
@@ -60,12 +67,20 @@ export default function HomeScreen() {
     };
   }, [loadWeather]);
 
-  // Pesanan aktif yang sedang berlangsung (#WU0067)
-  const activeOrder = ORDERS_DATA.find((o) => o.status === 'Sedang Dicuci') || ORDERS_DATA[0];
+  // Pull-to-refresh untuk menyegarkan data pesanan Cloud Supabase & cuaca Modul 3
+  const handlePullToRefresh = useCallback(async () => {
+    loadWeather();
+    await refreshOrders();
+  }, [loadWeather, refreshOrders]);
+
+  // Pesanan aktif yang sedang berlangsung (prioritaskan pesanan Cloud terbaru atau #WU0067)
+  const activeOrder =
+    orders.find((o) => o.status === 'Sedang Dicuci' || o.status === 'Diproses' || o.status === 'Disetrika') ||
+    orders[0] ||
+    ORDERS_DATA[0];
 
   // Handler saat kartu layanan diklik
   const handleServicePress = (service: Service) => {
-    // Navigasi ke halaman Buat Pesanan
     router.push('/(tabs)/orders' as any);
   };
 
@@ -76,7 +91,10 @@ export default function HomeScreen() {
 
   // Handler saat kartu pesanan aktif diklik
   const handleActiveOrderPress = () => {
-    router.push('/(tabs)/status' as any);
+    router.push({
+      pathname: '/(tabs)/status',
+      params: { orderId: activeOrder.id },
+    } as any);
   };
 
   return (
@@ -85,6 +103,14 @@ export default function HomeScreen() {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoadingCloud}
+            onRefresh={handlePullToRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
       >
         {/* ================================================================== */}
         {/* HEADER SECTION: Logo WashUp & User Greeting */}
@@ -112,11 +138,13 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* Sapaan Pengguna & Tagline WashUp */}
+          {/* Sapaan Pengguna Terautentikasi (Modul 4: AuthContext) & Tagline WashUp */}
           <View style={styles.greetingBox}>
-            <Text style={styles.greetingTitle}>Halo, Selamat Datang!</Text>
-            <Text style={styles.greetingSubtitle}>
-              Laundry lebih mudah, kapan saja.
+            <Text style={styles.greetingTitle} numberOfLines={1}>
+              Halo, {userDisplayName}!
+            </Text>
+            <Text style={styles.greetingSubtitle} numberOfLines={1}>
+              Laundry lebih mudah, kapan saja • {userEmail}
             </Text>
           </View>
         </View>
@@ -168,7 +196,15 @@ export default function HomeScreen() {
         {/* PESANAN AKTIF SECTION: Menampilkan pesanan yang sedang berjalan */}
         {/* ================================================================== */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Pesanan Aktif</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>Pesanan Aktif</Text>
+            {cloudOrders.length > 0 && (
+              <View style={styles.cloudCountBadge}>
+                <IconSymbol name="cloud-done-outline" size={12} color={COLORS.primaryDark} />
+                <Text style={styles.cloudCountText}>{cloudOrders.length} Cloud</Text>
+              </View>
+            )}
+          </View>
           <Pressable onPress={handleActiveOrderPress}>
             <Text style={styles.seeAllText}>Lihat Status</Text>
           </Pressable>
@@ -190,6 +226,11 @@ export default function HomeScreen() {
             <View style={styles.activeOrderIdRow}>
               <View style={styles.pulseIndicator} />
               <Text style={styles.activeOrderId}>{activeOrder.id}</Text>
+              {activeOrder.isCloud && (
+                <View style={styles.cloudTag}>
+                  <Text style={styles.cloudTagText}>Cloud RLS</Text>
+                </View>
+              )}
             </View>
             <StatusBadge status={activeOrder.status} size="small" />
           </View>
@@ -305,11 +346,6 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
   },
-  avatarInitials: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.primaryDark,
-  },
   onlineDot: {
     position: 'absolute',
     top: 0,
@@ -331,15 +367,15 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   greetingSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
   promoCard: {
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.xl,
-    padding: 22,
-    marginBottom: 26,
+    padding: 20,
+    marginBottom: 18,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -408,14 +444,33 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     marginBottom: 12,
     marginTop: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: COLORS.textPrimary,
+  },
+  cloudCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  cloudCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
   },
   sectionCaption: {
     fontSize: 12,
@@ -430,8 +485,8 @@ const styles = StyleSheet.create({
   activeOrderCard: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
-    padding: 16,
-    marginBottom: 24,
+    padding: 18,
+    marginBottom: 20,
     borderWidth: 1.5,
     borderColor: COLORS.statusProcessBorder,
   },
@@ -454,6 +509,19 @@ const styles = StyleSheet.create({
   },
   activeOrderId: {
     fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.primaryDark,
+  },
+  cloudTag: {
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    paddingVertical: 1,
+    paddingHorizontal: 6,
+    borderRadius: RADIUS.full,
+  },
+  cloudTagText: {
+    fontSize: 9,
     fontWeight: '800',
     color: COLORS.primaryDark,
   },

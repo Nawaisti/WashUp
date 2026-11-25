@@ -4,7 +4,7 @@
 // ============================================================================
 
 import React from 'react';
-import { StyleSheet, View, ColorValue } from 'react-native';
+import { StyleSheet, View, ColorValue, OpaqueColorValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 
@@ -21,10 +21,11 @@ export const IconSymbol: React.FC<IconProps> = ({
 }) => {
   // Mapping nama icon ke Ionicons valid icon names
   const validName = (name as any) || 'ellipse-outline';
+  const resolvedColor = (color ?? COLORS.primaryDark) as string | OpaqueColorValue;
 
   return (
     <View style={styles.iconContainer}>
-      <Ionicons name={validName} size={size} color={color} />
+      <Ionicons name={validName} size={size} color={resolvedColor} />
     </View>
   );
 };

@@ -44,6 +44,32 @@ export interface Order {
   progressStep?: number; // 1: Diterima, 2: Dicuci, 3: Disetrika, 4: Selesai
   address?: string;
   paymentMethod?: string;
+  // Modul 4: Metadata sinkronisasi Cloud PostgreSQL (Supabase) & RLS
+  cloudId?: string;
+  userId?: string;
+  isCloud?: boolean;
+  createdAt?: string;
+}
+
+/**
+ * Representasi baris tabel PostgreSQL `public.laundry_orders` di Supabase (Modul 4)
+ */
+export interface CloudLaundryOrderRow {
+  id: string;
+  user_id: string;
+  order_code: string;
+  customer_name: string;
+  service: string;
+  date: string;
+  amount: number;
+  unit: string;
+  price: number;
+  status: OrderStatus;
+  notes: string | null;
+  progress_step: number;
+  address: string | null;
+  payment_method: string | null;
+  created_at: string;
 }
 
 /**
